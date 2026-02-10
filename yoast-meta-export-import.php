@@ -44,6 +44,18 @@ class Yoast_Meta_Export_Import {
     }
 
     public function admin_page() {
+        $message = isset($_GET['message']) ? sanitize_key($_GET['message']) : '';
+        $details = isset($_GET['details']) ? sanitize_key($_GET['details']) : 'unknown';
+        $context = isset($_GET['context']) ? sanitize_key($_GET['context']) : '';
+
+        $import_results = null;
+        if (($context === '' || $context === 'import') && $message === 'success') {
+            $import_results = get_transient('ymei_import_results');
+            if ($import_results) {
+                delete_transient('ymei_import_results');
+            }
+        }
+
         ?>
         <div class="wrap">
             <h1><?php echo esc_html__('Yoast Meta Description Export/Import', 'yoast-meta-export-import'); ?></h1>
@@ -51,6 +63,15 @@ class Yoast_Meta_Export_Import {
             <div class="card" style="max-width: none;">
                 <h2><?php echo esc_html__('Export Meta Descriptions', 'yoast-meta-export-import'); ?></h2>
                 <p><?php echo esc_html__('Exports all Yoast SEO meta descriptions for pages, posts and custom post types.', 'yoast-meta-export-import'); ?></p>
+
+                <?php if ($context === 'export' && $message === 'error') : ?>
+                    <div class="notice notice-error inline" role="alert" aria-live="assertive">
+                        <p><strong><?php echo esc_html__('Export failed:', 'yoast-meta-export-import'); ?></strong>
+                            <?php echo esc_html($this->get_error_message('export', $details)); ?>
+                        </p>
+                    </div>
+                <?php endif; ?>
+
                 <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                     <input type="hidden" name="action" value="ymei_export">
                     <?php wp_nonce_field('ymei_export_action', 'ymei_export_nonce'); ?>
@@ -61,6 +82,40 @@ class Yoast_Meta_Export_Import {
             <div class="card" style="max-width: none;">
                 <h2><?php echo esc_html__('Import Meta Descriptions', 'yoast-meta-export-import'); ?></h2>
                 <p><?php echo esc_html__('Imports meta descriptions by matching slugs.', 'yoast-meta-export-import'); ?></p>
+
+                <?php if (($context === '' || $context === 'import') && $message === 'success' && is_array($import_results)) : ?>
+                    <div class="notice notice-success inline" role="status" aria-live="polite">
+                        <p><strong><?php echo esc_html__('Import successful!', 'yoast-meta-export-import'); ?></strong></p>
+                        <p><?php echo esc_html(sprintf(
+                            /* translators: %d = number of updated items */
+                            __('Updated: %d items', 'yoast-meta-export-import'),
+                            absint($import_results['updated'])
+                        )); ?></p>
+
+                        <?php if (!empty($import_results['not_found'])) : ?>
+                            <p><?php echo esc_html(sprintf(
+                                /* translators: %d = number of not found items */
+                                __('Not found: %d items', 'yoast-meta-export-import'),
+                                absint($import_results['not_found'])
+                            )); ?></p>
+                            <details>
+                                <summary><?php echo esc_html__('View not found items', 'yoast-meta-export-import'); ?></summary>
+                                <ul>
+                                    <?php foreach ((array) $import_results['not_found_slugs'] as $slug) : ?>
+                                        <li><?php echo esc_html($slug); ?></li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            </details>
+                        <?php endif; ?>
+                    </div>
+                <?php elseif (($context === '' || $context === 'import') && $message === 'error') : ?>
+                    <div class="notice notice-error inline" role="alert" aria-live="assertive">
+                        <p><strong><?php echo esc_html__('Import failed:', 'yoast-meta-export-import'); ?></strong>
+                            <?php echo esc_html($this->get_error_message('import', $details)); ?>
+                        </p>
+                    </div>
+                <?php endif; ?>
+
                 <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" enctype="multipart/form-data">
                     <input type="hidden" name="action" value="ymei_import">
                     <?php wp_nonce_field('ymei_import_action', 'ymei_import_nonce'); ?>
@@ -82,14 +137,50 @@ class Yoast_Meta_Export_Import {
         <?php
     }
 
+    private function get_error_message($context, $details_key) {
+        $context_key = is_string($context) ? sanitize_key($context) : 'import';
+        $details = is_string($details_key) ? sanitize_key($details_key) : 'unknown';
+
+        $messages = array(
+            'import' => array(
+                'upload_failed' => __('Upload failed. Please try again.', 'yoast-meta-export-import'),
+                'invalid_json' => __('Invalid JSON file.', 'yoast-meta-export-import'),
+                'unknown' => __('Unknown error.', 'yoast-meta-export-import'),
+            ),
+            'export' => array(
+                'unauthorized' => __('You are not allowed to export meta descriptions.', 'yoast-meta-export-import'),
+                'invalid_nonce' => __('Security check failed. Please try again.', 'yoast-meta-export-import'),
+                'unknown' => __('Unknown error.', 'yoast-meta-export-import'),
+            ),
+        );
+
+        if (!isset($messages[$context_key])) {
+            $context_key = 'import';
+        }
+
+        return isset($messages[$context_key][$details]) ? $messages[$context_key][$details] : $messages[$context_key]['unknown'];
+    }
+
     public function handle_export() {
         // Check permissions and nonce
         if (!current_user_can('manage_options')) {
-            wp_die(esc_html__('Unauthorized', 'yoast-meta-export-import'));
+            wp_safe_redirect(add_query_arg(array(
+                'page' => 'yoast-meta-export-import',
+                'context' => 'export',
+                'message' => 'error',
+                'details' => 'unauthorized',
+            ), admin_url('tools.php')));
+            exit;
         }
 
         if (!isset($_POST['ymei_export_nonce']) || !wp_verify_nonce($_POST['ymei_export_nonce'], 'ymei_export_action')) {
-            wp_die(esc_html__('Invalid nonce', 'yoast-meta-export-import'));
+            wp_safe_redirect(add_query_arg(array(
+                'page' => 'yoast-meta-export-import',
+                'context' => 'export',
+                'message' => 'error',
+                'details' => 'invalid_nonce',
+            ), admin_url('tools.php')));
+            exit;
         }
 
         // Get all public post types
@@ -204,50 +295,3 @@ class Yoast_Meta_Export_Import {
 
 // Initialize plugin
 new Yoast_Meta_Export_Import();
-
-// Display admin notices
-add_action('admin_notices', function() {
-    if (!isset($_GET['page']) || $_GET['page'] !== 'yoast-meta-export-import') {
-        return;
-    }
-
-    $error_messages = array(
-        'upload_failed' => __('Upload failed. Please try again.', 'yoast-meta-export-import'),
-        'invalid_json' => __('Invalid JSON file.', 'yoast-meta-export-import'),
-        'unknown' => __('Unknown error.', 'yoast-meta-export-import'),
-    );
-
-    if (isset($_GET['message'])) {
-        if ($_GET['message'] === 'success') {
-            $results = get_transient('ymei_import_results');
-            if ($results) {
-                echo '<div class="notice notice-success is-dismissible" role="status" aria-live="polite">';
-                echo '<p><strong>' . esc_html__('Import successful!', 'yoast-meta-export-import') . '</strong></p>';
-                echo '<p>' . sprintf(
-                    esc_html__('Updated: %d items', 'yoast-meta-export-import'),
-                    absint($results['updated'])
-                ) . '</p>';
-                if (!empty($results['not_found'])) {
-                    echo '<p>' . sprintf(
-                        esc_html__('Not found: %d items', 'yoast-meta-export-import'),
-                        absint($results['not_found'])
-                    ) . '</p>';
-                    echo '<details><summary>' . esc_html__('View not found items', 'yoast-meta-export-import') . '</summary><ul>';
-                    foreach ((array) $results['not_found_slugs'] as $slug) {
-                        echo '<li>' . esc_html($slug) . '</li>';
-                    }
-                    echo '</ul></details>';
-                }
-                echo '</div>';
-                delete_transient('ymei_import_results');
-            }
-        } elseif ($_GET['message'] === 'error') {
-            $details = isset($_GET['details']) ? $_GET['details'] : 'unknown';
-            $details_key = is_string($details) ? sanitize_key($details) : 'unknown';
-            $message = isset($error_messages[$details_key]) ? $error_messages[$details_key] : $error_messages['unknown'];
-            echo '<div class="notice notice-error is-dismissible" role="alert" aria-live="assertive">';
-            echo '<p><strong>' . esc_html__('Import failed:', 'yoast-meta-export-import') . '</strong> ' . esc_html($message) . '</p>';
-            echo '</div>';
-        }
-    }
-});
