@@ -48,20 +48,20 @@ class Yoast_Meta_Export_Import {
         <div class="wrap">
             <h1><?php echo esc_html__('Yoast Meta Description Export/Import', 'yoast-meta-export-import'); ?></h1>
 
-            <div style="background: #fff; padding: 20px; margin: 20px 0; border: 1px solid #ccc;">
+            <div class="card" style="max-width: none;">
                 <h2><?php echo esc_html__('Export Meta Descriptions', 'yoast-meta-export-import'); ?></h2>
                 <p><?php echo esc_html__('Exports all Yoast SEO meta descriptions for pages, posts and custom post types.', 'yoast-meta-export-import'); ?></p>
-                <form method="post" action="<?php echo admin_url('admin-post.php'); ?>">
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                     <input type="hidden" name="action" value="ymei_export">
                     <?php wp_nonce_field('ymei_export_action', 'ymei_export_nonce'); ?>
                     <?php submit_button(__('Export Meta Descriptions', 'yoast-meta-export-import'), 'primary', 'submit', false); ?>
                 </form>
             </div>
 
-            <div style="background: #fff; padding: 20px; margin: 20px 0; border: 1px solid #ccc;">
+            <div class="card" style="max-width: none;">
                 <h2><?php echo esc_html__('Import Meta Descriptions', 'yoast-meta-export-import'); ?></h2>
                 <p><?php echo esc_html__('Imports meta descriptions by matching slugs.', 'yoast-meta-export-import'); ?></p>
-                <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" enctype="multipart/form-data">
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" enctype="multipart/form-data">
                     <input type="hidden" name="action" value="ymei_import">
                     <?php wp_nonce_field('ymei_import_action', 'ymei_import_nonce'); ?>
                     <table class="form-table">
@@ -70,8 +70,8 @@ class Yoast_Meta_Export_Import {
                                 <label for="import_file"><?php echo esc_html__('JSON file', 'yoast-meta-export-import'); ?></label>
                             </th>
                             <td>
-                                <input type="file" name="import_file" id="import_file" accept=".json" required>
-                                <p class="description"><?php echo esc_html__('Upload the exported JSON file.', 'yoast-meta-export-import'); ?></p>
+                                <input type="file" name="import_file" id="import_file" accept=".json" aria-describedby="ymei-import-file-help" required>
+                                <p class="description" id="ymei-import-file-help"><?php echo esc_html__('Upload the exported JSON file.', 'yoast-meta-export-import'); ?></p>
                             </td>
                         </tr>
                     </table>
@@ -221,7 +221,7 @@ add_action('admin_notices', function() {
         if ($_GET['message'] === 'success') {
             $results = get_transient('ymei_import_results');
             if ($results) {
-                echo '<div class="notice notice-success is-dismissible">';
+                echo '<div class="notice notice-success is-dismissible" role="status" aria-live="polite">';
                 echo '<p><strong>' . esc_html__('Import successful!', 'yoast-meta-export-import') . '</strong></p>';
                 echo '<p>' . sprintf(
                     esc_html__('Updated: %d items', 'yoast-meta-export-import'),
@@ -245,7 +245,7 @@ add_action('admin_notices', function() {
             $details = isset($_GET['details']) ? $_GET['details'] : 'unknown';
             $details_key = is_string($details) ? sanitize_key($details) : 'unknown';
             $message = isset($error_messages[$details_key]) ? $error_messages[$details_key] : $error_messages['unknown'];
-            echo '<div class="notice notice-error is-dismissible">';
+            echo '<div class="notice notice-error is-dismissible" role="alert" aria-live="assertive">';
             echo '<p><strong>' . esc_html__('Import failed:', 'yoast-meta-export-import') . '</strong> ' . esc_html($message) . '</p>';
             echo '</div>';
         }
