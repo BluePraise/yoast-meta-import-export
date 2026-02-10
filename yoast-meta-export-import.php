@@ -70,6 +70,12 @@ class Yoast_Meta_Export_Import {
                             <?php echo esc_html($this->get_error_message('export', $details)); ?>
                         </p>
                     </div>
+                <?php elseif ($context === 'export' && $message === 'info') : ?>
+                    <div class="notice notice-info inline" role="status" aria-live="polite">
+                        <p><strong><?php echo esc_html__('Nothing to export.', 'yoast-meta-export-import'); ?></strong>
+                            <?php echo esc_html($this->get_error_message('export', $details)); ?>
+                        </p>
+                    </div>
                 <?php endif; ?>
 
                 <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
@@ -150,6 +156,7 @@ class Yoast_Meta_Export_Import {
             'export' => array(
                 'unauthorized' => __('You are not allowed to export meta descriptions.', 'yoast-meta-export-import'),
                 'invalid_nonce' => __('Security check failed. Please try again.', 'yoast-meta-export-import'),
+                'no_data' => __('No posts with Yoast meta descriptions were found.', 'yoast-meta-export-import'),
                 'unknown' => __('Unknown error.', 'yoast-meta-export-import'),
             ),
         );
@@ -209,6 +216,16 @@ class Yoast_Meta_Export_Import {
                     );
                 }
             }
+        }
+
+        if (empty($export_data)) {
+            wp_safe_redirect(add_query_arg(array(
+                'page' => 'yoast-meta-export-import',
+                'context' => 'export',
+                'message' => 'info',
+                'details' => 'no_data',
+            ), admin_url('tools.php')));
+            exit;
         }
 
         // Create JSON
